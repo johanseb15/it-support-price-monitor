@@ -2,9 +2,9 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
-  SERP_API_KEY: z.string().min(1).optional(),
+  SERP_API_KEY: z.string().min(1),
   SERP_PROVIDER: z.enum(["serpapi", "brightdata"]).default("serpapi"),
-  CRON_SECRET: z.string().min(16).optional(),
+  CRON_SECRET: z.string().min(1),
   SCRAPER_MAX_COMPANIES_PER_RUN: z.coerce.number().int().positive().default(25),
   SCRAPER_TARGET_CITY: z.string().min(1).default("Cordoba Capital, Cordoba, Argentina"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

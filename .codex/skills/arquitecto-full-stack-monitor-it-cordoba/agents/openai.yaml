@@ -1,0 +1,4 @@
+interface:
+  display_name: "Arquitecto Full-Stack Monitor IT Córdoba"
+  short_description: "Arquitectura estricta para Monitor IT Córdoba"
+  default_prompt: "Use $arquitecto-full-stack-monitor-it-cordoba para trabajar bajo el contrato de arquitectura del Monitor de Precios IT Córdoba."

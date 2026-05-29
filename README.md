@@ -1,36 +1,160 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Monitor de Precios IT Cordoba
 
-## Getting Started
+Herramienta profesional para descubrir empresas de soporte tecnico en Cordoba Capital, extraer precios publicados, normalizar servicios por nivel de soporte y visualizar historicos comparables en una interfaz operativa.
 
-First, run the development server:
+El proyecto concentra descubrimiento, scraping, persistencia historica, API interna y dashboard en una arquitectura full-stack modular. La regla central es preservar el historial: cada precio detectado se inserta como un nuevo registro en `PriceHistory`, sin sobrescribir mediciones anteriores.
+
+## Stack
+
+- Next.js 14+ App Router con TypeScript.
+- PostgreSQL + Prisma ORM.
+- Tailwind CSS para interfaz sobria y densa.
+- SerpApi para descubrimiento en Google Local/Maps.
+- Playwright + Cheerio para extraccion de sitios objetivo.
+- TanStack Table para tablas analiticas.
+- Recharts para tendencias de precios.
+- Vitest para pruebas unitarias e integracion.
+
+## Instalacion Y Configuracion
+
+1. Instalar dependencias:
+
+```bash
+npm install
+```
+
+2. Crear el archivo local de entorno:
+
+```bash
+cp .env.example .env
+```
+
+En Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+3. Configurar `.env` con valores reales o locales:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/monitor_precios_it?schema=public"
+SERP_API_KEY="tu_clave_de_serpapi"
+SERP_PROVIDER="serpapi"
+CRON_SECRET="token_largo_para_endpoint_cron"
+SCRAPER_MAX_COMPANIES_PER_RUN="25"
+SCRAPER_TARGET_CITY="Cordoba Capital, Cordoba, Argentina"
+NODE_ENV="development"
+```
+
+4. Descargar Chromium para Playwright:
+
+```bash
+npm exec playwright -- install chromium
+```
+
+5. Validar Prisma y crear tablas:
+
+```bash
+npm exec prisma validate
+npm run db:migrate -- --name init
+```
+
+6. Levantar la aplicacion:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Comandos Utiles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev
+```
 
-## Learn More
+Inicia Next.js en desarrollo.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Compila la aplicacion completa.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run lint
+```
 
-## Deploy on Vercel
+Ejecuta ESLint.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run test
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Ejecuta la suite de Vitest.
+
+```bash
+npm exec prisma validate
+```
+
+Valida el schema de Prisma.
+
+```bash
+npm run db:migrate -- --name init
+```
+
+Aplica migraciones en desarrollo.
+
+```bash
+npm run db:studio
+```
+
+Abre Prisma Studio.
+
+```bash
+npm run scraper:run
+```
+
+Ejecuta manualmente el pipeline completo de descubrimiento, extraccion, normalizacion y persistencia.
+
+## Automatizacion
+
+El endpoint `POST /api/scraper/run` esta protegido por:
+
+```http
+Authorization: Bearer ${CRON_SECRET}
+```
+
+La automatizacion semanal queda preparada en `.github/workflows/scraper-cron.yml`. Antes de usarla en produccion:
+
+- Configurar el secret `APP_BASE_URL` con la URL publica del deploy, por ejemplo `https://monitor-it.vercel.app`.
+- Configurar el secret `CRON_SECRET` en GitHub Actions.
+- Verificar que la base de datos de produccion y `SERP_API_KEY` esten configuradas en el entorno de deploy.
+
+## CI/CD
+
+El repositorio incluye tres workflows:
+
+- `.github/workflows/ci.yml`: valida Prisma, lint, tests y build en cada push a `main` y pull request.
+- `.github/workflows/deploy-vercel.yml`: despliega a Vercel en cada push a `main` o manualmente.
+- `.github/workflows/scraper-cron.yml`: dispara el scraper por HTTP una vez por semana o manualmente.
+
+Secrets requeridos para CI/CD:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `APP_BASE_URL`
+- `CRON_SECRET`
+
+Las variables de runtime de la aplicacion (`DATABASE_URL`, `SERP_API_KEY`, `SERP_PROVIDER`, `SCRAPER_MAX_COMPANIES_PER_RUN`, `SCRAPER_TARGET_CITY`, `CRON_SECRET`) deben configurarse en Vercel.
+
+## Estructura Principal
+
+- `src/services/scraper/`: descubrimiento, extractor, normalizador y runner.
+- `src/services/pricing/`: consultas Prisma para dashboard y listados.
+- `app/api/`: controladores HTTP finos.
+- `components/`: layout, UI base y visualizaciones.
+- `prisma/`: schema, migraciones y seed.
+- `tests/`: pruebas unitarias e integracion.

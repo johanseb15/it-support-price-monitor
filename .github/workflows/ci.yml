@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/monitor_precios_it?schema=public"
+      SERP_API_KEY: "ci-serp-api-key"
+      SERP_PROVIDER: "serpapi"
+      CRON_SECRET: "ci-cron-secret"
+      SCRAPER_MAX_COMPANIES_PER_RUN: "25"
+      SCRAPER_TARGET_CITY: "Cordoba Capital, Cordoba, Argentina"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npm exec playwright -- install chromium
+
+      - name: Validate Prisma schema
+        run: npm exec prisma validate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
