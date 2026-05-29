@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Prisma, SupportLevel } from "@prisma/client";
+import type { SupportLevel } from "@prisma/client";
 
 import { db } from "../../../lib/db";
 
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const companyId = searchParams.get("companyId");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const where: Prisma.PriceHistoryWhereInput = {};
+  const where: any = {};
 
   if (supportLevel) {
     if (!SUPPORT_LEVELS.has(supportLevel as SupportLevel)) {
