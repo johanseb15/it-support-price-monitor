@@ -58,7 +58,10 @@ npm exec playwright -- install chromium
 ```bash
 npm exec prisma validate
 npm run db:migrate -- --name init
+npm run db:seed
 ```
+
+Desarrollo local con `.env`. Produccion (Supabase): ver `supabase/README.md`.
 
 6. Levantar la aplicacion:
 
@@ -107,6 +110,18 @@ npm run db:migrate -- --name init
 Aplica migraciones en desarrollo.
 
 ```bash
+npm run db:deploy
+```
+
+Aplica migraciones en la base configurada en `DATABASE_URL` (por ejemplo Supabase).
+
+```bash
+npm run db:seed
+```
+
+Inserta datos demo idempotentes.
+
+```bash
 npm run db:studio
 ```
 
@@ -128,9 +143,24 @@ Authorization: Bearer ${CRON_SECRET}
 
 La automatizacion semanal queda preparada en `.github/workflows/scraper-cron.yml`. Antes de usarla en produccion:
 
-- Configurar el secret `APP_BASE_URL` con la URL publica del deploy, por ejemplo `https://monitor-it.vercel.app`.
-- Configurar el secret `CRON_SECRET` en GitHub Actions.
+- Configurar el secret `CRON_SECRET` en GitHub Actions (mismo valor que en Vercel).
+- URL de produccion: `https://monitor-precios-it.vercel.app`
 - Verificar que la base de datos de produccion y `SERP_API_KEY` esten configuradas en el entorno de deploy.
+
+Configurar secrets de GitHub (con `gh` autenticado):
+
+```powershell
+npx vercel env pull .env.local --environment=production --yes
+.\scripts\setup-github-secrets.ps1
+```
+
+## Produccion (Vercel + Supabase)
+
+1. Variables en Vercel: `DATABASE_URL`, `SERP_API_KEY`, `SERP_PROVIDER`, `CRON_SECRET`, `SCRAPER_*`.
+2. El build ejecuta `prisma migrate deploy` y seed contra Supabase.
+3. Proyecto en produccion: [monitor-precios-it.vercel.app](https://monitor-precios-it.vercel.app)
+
+Detalle de conexion Supabase: `supabase/README.md`.
 
 ## CI/CD
 
@@ -145,8 +175,7 @@ Secrets requeridos para CI/CD:
 - `VERCEL_TOKEN`
 - `VERCEL_ORG_ID`
 - `VERCEL_PROJECT_ID`
-- `APP_BASE_URL`
-- `CRON_SECRET`
+- `CRON_SECRET` (mismo valor que en Vercel)
 
 Las variables de runtime de la aplicacion (`DATABASE_URL`, `SERP_API_KEY`, `SERP_PROVIDER`, `SCRAPER_MAX_COMPANIES_PER_RUN`, `SCRAPER_TARGET_CITY`, `CRON_SECRET`) deben configurarse en Vercel.
 

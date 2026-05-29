@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "../lib/create-prisma-client";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   await prisma.company.upsert({

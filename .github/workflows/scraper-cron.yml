@@ -9,11 +9,12 @@ jobs:
   run-scraper:
     runs-on: ubuntu-latest
     env:
-      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+      APP_BASE_URL: https://monitor-precios-it.vercel.app
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
       - name: Trigger production scraper
         run: |
-          test -n "$APP_BASE_URL"
+          test -n "$CRON_SECRET"
           curl --fail --show-error --silent \
             --request POST \
             --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
