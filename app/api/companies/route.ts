@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 
 import { db } from "../../../lib/db";
 
@@ -8,7 +7,7 @@ export async function GET(request: Request) {
   const city = searchParams.get("city");
   const active = searchParams.get("active");
   const q = searchParams.get("q");
-  const where: Prisma.CompanyWhereInput = {};
+  const where: any = {};
 
   if (city) {
     where.city = city;
