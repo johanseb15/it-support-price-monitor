@@ -26,6 +26,8 @@ function Get-EnvValue([string]$Name) {
 $secrets = @{
     APP_BASE_URL = $ProductionUrl
     CRON_SECRET  = Get-EnvValue "CRON_SECRET"
+    SERP_API_KEY = Get-EnvValue "SERP_API_KEY"
+    DATABASE_URL = Get-EnvValue "DATABASE_URL"
 }
 
 foreach ($entry in $secrets.GetEnumerator()) {

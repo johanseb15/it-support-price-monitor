@@ -9,13 +9,28 @@ jobs:
   run-scraper:
     runs-on: ubuntu-latest
     env:
-      APP_BASE_URL: https://monitor-precios-it.vercel.app
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
+      SERP_PROVIDER: serpapi
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      SCRAPER_MAX_COMPANIES_PER_RUN: "25"
+      SCRAPER_TARGET_CITY: "Cordoba Capital, Cordoba, Argentina"
+      NODE_ENV: production
     steps:
-      - name: Trigger production scraper
-        run: |
-          test -n "$CRON_SECRET"
-          curl --fail --show-error --silent \
-            --request POST \
-            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "$APP_BASE_URL/api/scraper/run"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run scraping pipeline
+        run: npm run scraper:run

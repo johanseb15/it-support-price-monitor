@@ -5,8 +5,11 @@ Este proyecto usa **PostgreSQL de Supabase** con **Prisma**. No usa `@supabase/s
 ## Conexion
 
 1. Supabase → **Project Settings** → **Database** → **Connection string** → **URI**.
-2. Usa **Direct** (puerto `5432`) para migraciones locales.
-3. En **Vercel**, `DATABASE_URL` debe ser la misma URI Direct (con contrasena URL-encoded).
+2. En **Vercel**, usa **Session pooler** (puerto `5432` en `aws-0-<region>.pooler.supabase.com`).
+3. El host `db.<ref>.supabase.co:5432` suele fallar con `P1001` desde redes serverless; usa el pooler.
+4. Si migrate falla, ejecuta `supabase/init.sql` en **SQL Editor** (idempotente).
+5. El scraper semanal corre en **GitHub Actions** (`scraper-cron.yml`), no en Vercel (Playwright + timeouts).
+6. Secrets en GitHub: `DATABASE_URL`, `SERP_API_KEY`, `CRON_SECRET`.
 
 Referencia del proyecto: `https://oawdjjlmvmfnpshgbnix.supabase.co`
 

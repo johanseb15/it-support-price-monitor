@@ -141,11 +141,15 @@ El endpoint `POST /api/scraper/run` esta protegido por:
 Authorization: Bearer ${CRON_SECRET}
 ```
 
-La automatizacion semanal queda preparada en `.github/workflows/scraper-cron.yml`. Antes de usarla en produccion:
+La automatizacion semanal corre en `.github/workflows/scraper-cron.yml` (GitHub Actions ejecuta `npm run scraper:run` con Playwright). No uses el endpoint HTTP en Vercel para el cron: los limites serverless rompen el pipeline.
 
-- Configurar el secret `CRON_SECRET` en GitHub Actions (mismo valor que en Vercel).
-- URL de produccion: `https://monitor-precios-it.vercel.app`
-- Verificar que la base de datos de produccion y `SERP_API_KEY` esten configuradas en el entorno de deploy.
+Secrets en GitHub (Repository secrets):
+
+- `DATABASE_URL` (pooler Supabase, misma URL que en Vercel)
+- `SERP_API_KEY`
+- `CRON_SECRET`
+
+Dashboard en produccion: `https://monitor-precios-it.vercel.app`
 
 Configurar secrets de GitHub (con `gh` autenticado):
 
@@ -153,6 +157,8 @@ Configurar secrets de GitHub (con `gh` autenticado):
 npx vercel env pull .env.local --environment=production --yes
 .\scripts\setup-github-secrets.ps1
 ```
+
+Tras `vercel env pull`, borra del `.env.local` las lineas vacias (`SERP_API_KEY=""`, etc.) para no pisar tu `.env` local en desarrollo.
 
 ## Produccion (Vercel + Supabase)
 
