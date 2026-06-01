@@ -52,89 +52,124 @@ type TrendQueryRow = {
   averagePrice: unknown;
 };
 
-function toNumber(value: unknown): number {
-  if (typeof value === "number") {
-    return value;
-  }
+function safeToNumber(value: unknown, defaultValue = 0): number {
+  if (value === null || value === undefined) return defaultValue;
 
-  if (typeof value === "string") {
-    return Number(value);
-  }
+  try {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : defaultValue;
+    }
 
-  if (value && typeof value === "object" && "toNumber" in value) {
-    return (value as { toNumber: () => number }).toNumber();
-  }
+    if (typeof value === "string") {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : defaultValue;
+    }
 
-  return Number(value);
+    if (value && typeof value === "object" && "toNumber" in value && typeof (value as any).toNumber === "function") {
+      const n = (value as { toNumber: () => number }).toNumber();
+      return Number.isFinite(n) ? n : defaultValue;
+    }
+
+    const n = Number(value as any);
+    return Number.isFinite(n) ? n : defaultValue;
+  } catch {
+    return defaultValue;
+  }
 }
 
 function serializeDate(value: Date): string {
   return value.toISOString();
 }
 
+async function safeDbCall<T>(callback: () => Promise<T>, fallback: T, context: string): Promise<T> {
+  try {
+    return await callback();
+  } catch (error) {
+    console.error(`${context} failed, returning safe fallback:`, error);
+    return fallback;
+  }
+}
+
 export async function getDashboardKpis(): Promise<DashboardKpis> {
   const since = new Date();
   since.setDate(since.getDate() - 30);
-
-  const [activeCompanies, pricesLast30Days, averages] = await Promise.all([
-    db.company.count({ where: { isActive: true } }),
-    db.priceHistory.count({ where: { scrapedAt: { gte: since } } }),
-    db.priceHistory.groupBy({
-      by: ["supportLevel"],
-      where: {
-        supportLevel: {
-          in: SUPPORT_LEVELS,
+  try {
+    const [activeCompanies, pricesLast30Days, averages] = await Promise.all([
+      db.company.count({ where: { isActive: true } }),
+      db.priceHistory.count({ where: { scrapedAt: { gte: since } } }),
+      db.priceHistory.groupBy({
+        by: ["supportLevel"],
+        where: {
+          supportLevel: {
+            in: SUPPORT_LEVELS,
+          },
         },
-      },
-      _avg: {
-        extractedPrice: true,
-      },
-    }),
-  ]);
+        _avg: {
+          extractedPrice: true,
+        },
+      }),
+    ]);
 
-  const averageByLevel = SUPPORT_LEVELS.reduce<DashboardKpis["averageByLevel"]>(
-    (accumulator, level) => {
-      const match = averages.find((average) => average.supportLevel === level);
-      accumulator[level] = match?._avg.extractedPrice
-        ? toNumber(match._avg.extractedPrice)
-        : null;
-      return accumulator;
-    },
-    {
-      LEVEL_1: null,
-      LEVEL_2: null,
-      LEVEL_3: null,
-    },
-  );
+    const averageByLevel = SUPPORT_LEVELS.reduce<DashboardKpis["averageByLevel"]>(
+      (accumulator, level) => {
+        const match = averages.find((average) => average.supportLevel === level);
+        accumulator[level] = match?._avg.extractedPrice
+          ? safeToNumber(match._avg.extractedPrice, 0)
+          : 0;
+        return accumulator;
+      },
+      {
+        LEVEL_1: 0,
+        LEVEL_2: 0,
+        LEVEL_3: 0,
+      },
+    );
 
-  return {
-    activeCompanies,
-    pricesLast30Days,
-    averageByLevel,
-  };
+    return {
+      activeCompanies,
+      pricesLast30Days,
+      averageByLevel,
+    };
+  } catch (error) {
+    console.error("getDashboardKpis failed, returning safe defaults:", error);
+    return {
+      activeCompanies: 0,
+      pricesLast30Days: 0,
+      averageByLevel: {
+        LEVEL_1: 0,
+        LEVEL_2: 0,
+        LEVEL_3: 0,
+      },
+    };
+  }
 }
 
 export async function getRecentPrices(limit = 10): Promise<RecentPriceRow[]> {
-  const prices = await db.priceHistory.findMany({
-    take: limit,
-    include: {
-      company: {
-        select: {
-          name: true,
+  const prices = await safeDbCall(
+    () =>
+      db.priceHistory.findMany({
+        take: limit,
+        include: {
+          company: {
+            select: {
+              name: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: {
-      scrapedAt: "desc",
-    },
-  });
+        orderBy: {
+          scrapedAt: "desc",
+        },
+      }),
+    [],
+    "getRecentPrices",
+  );
 
   return prices.map((price) => ({
     id: price.id,
     companyName: price.company.name,
     serviceName: price.serviceName,
     supportLevel: price.supportLevel,
-    price: toNumber(price.extractedPrice),
+    price: safeToNumber(price.extractedPrice, 0),
     currency: price.currency,
     scrapedAt: serializeDate(price.scrapedAt),
   }));
@@ -144,17 +179,23 @@ export async function getPriceTrend(): Promise<TrendPoint[]> {
   const since = new Date();
   since.setMonth(since.getMonth() - 6);
 
-  const rows = await db.$queryRaw<TrendQueryRow[]>`
-    SELECT
-      date_trunc('week', "scrapedAt") AS "period",
-      "supportLevel",
-      AVG("extractedPrice") AS "averagePrice"
-    FROM "PriceHistory"
-    WHERE "scrapedAt" >= ${since}
-      AND "supportLevel" IN ('LEVEL_1', 'LEVEL_2', 'LEVEL_3')
-    GROUP BY 1, 2
-    ORDER BY 1 ASC
-  `;
+  let rows: TrendQueryRow[] = [];
+  try {
+    rows = await db.$queryRaw<TrendQueryRow[]>`
+      SELECT
+        date_trunc('week', "scrapedAt") AS "period",
+        "supportLevel",
+        AVG("extractedPrice") AS "averagePrice"
+      FROM "PriceHistory"
+      WHERE "scrapedAt" >= ${since}
+        AND "supportLevel" IN ('LEVEL_1', 'LEVEL_2', 'LEVEL_3')
+      GROUP BY 1, 2
+      ORDER BY 1 ASC
+    `;
+  } catch (error) {
+    console.error("getPriceTrend query failed, returning empty trend:", error);
+    return [];
+  }
 
   const points = new Map<string, TrendPoint>();
 
@@ -169,7 +210,8 @@ export async function getPriceTrend(): Promise<TrendPoint[]> {
         LEVEL_3: null,
       } satisfies TrendPoint);
 
-    point[row.supportLevel] = toNumber(row.averagePrice);
+    // Ensure numeric value (0 when missing) to avoid NaN in charts
+    point[row.supportLevel] = safeToNumber(row.averagePrice, 0);
     points.set(period, point);
   }
 
@@ -180,24 +222,29 @@ export async function getCompanies(params: {
   q?: string;
   active?: string;
 }): Promise<CompanyListRow[]> {
-  const companies = await db.company.findMany({
-    where: {
-      ...(params.q
-        ? {
-            name: {
-              contains: params.q,
-              mode: "insensitive",
-            },
-          }
-        : {}),
-      ...(params.active === "true" || params.active === "false"
-        ? { isActive: params.active === "true" }
-        : {}),
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
+  const companies = await safeDbCall(
+    () =>
+      db.company.findMany({
+        where: {
+          ...(params.q
+            ? {
+                name: {
+                  contains: params.q,
+                  mode: "insensitive",
+                },
+              }
+            : {}),
+          ...(params.active === "true" || params.active === "false"
+            ? { isActive: params.active === "true" }
+            : {}),
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
+    [],
+    "getCompanies",
+  );
 
   return companies.map((company) => ({
     id: company.id,
@@ -236,24 +283,29 @@ export async function getPriceHistory(params: {
       : {}),
   };
 
-  const [total, prices] = await Promise.all([
-    db.priceHistory.count({ where }),
-    db.priceHistory.findMany({
-      where,
-      take: pageSize,
-      skip: (page - 1) * pageSize,
-      include: {
-        company: {
-          select: {
-            name: true,
+  const [total, prices] = await safeDbCall(
+    async () =>
+      Promise.all([
+        db.priceHistory.count({ where }),
+        db.priceHistory.findMany({
+          where,
+          take: pageSize,
+          skip: (page - 1) * pageSize,
+          include: {
+            company: {
+              select: {
+                name: true,
+              },
+            },
           },
-        },
-      },
-      orderBy: {
-        scrapedAt: "desc",
-      },
-    }),
-  ]);
+          orderBy: {
+            scrapedAt: "desc",
+          },
+        }),
+      ]),
+    [0, []] as const,
+    "getPriceHistory",
+  );
 
   return {
     total,
@@ -264,7 +316,7 @@ export async function getPriceHistory(params: {
       companyName: price.company.name,
       serviceName: price.serviceName,
       supportLevel: price.supportLevel,
-      price: toNumber(price.extractedPrice),
+      price: safeToNumber(price.extractedPrice, 0),
       currency: price.currency,
       scrapedAt: serializeDate(price.scrapedAt),
       rawText: price.rawText,

@@ -151,22 +151,58 @@ Secrets en GitHub (Repository secrets):
 
 Dashboard en produccion: `https://monitor-precios-it.vercel.app`
 
-Configurar secrets de GitHub (con `gh` autenticado):
+Configurar secrets de GitHub (**Settings** → **Secrets and variables** → **Actions**):
 
-```powershell
-npx vercel env pull .env.local --environment=production --yes
-.\scripts\setup-github-secrets.ps1
+```bash
+# Repository Secrets:
+DATABASE_URL="postgresql://postgres:[PASSWORD]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
+SERP_API_KEY="tu_clave_real_de_serpapi"
+CRON_SECRET="token_secreto_largo_para_proteger_endpoint"
+DB_ALLOW_SELF_SIGNED_CERT="true"
 ```
 
-Tras `vercel env pull`, borra del `.env.local` las lineas vacias (`SERP_API_KEY=""`, etc.) para no pisar tu `.env` local en desarrollo.
+**Nota**: reemplaza `[PASSWORD]` con tu contraseña real de Supabase. Nunca pushes estas credenciales al repositorio; úsalas solo en GitHub Secrets y Vercel.
 
 ## Produccion (Vercel + Supabase)
 
-1. Variables en Vercel: `DATABASE_URL`, `SERP_API_KEY`, `SERP_PROVIDER`, `CRON_SECRET`, `SCRAPER_*`.
-2. El build ejecuta `prisma migrate deploy` y seed contra Supabase.
-3. Proyecto en produccion: [monitor-precios-it.vercel.app](https://monitor-precios-it.vercel.app)
+### Paso 1: Crear tablas en Supabase
+
+Antes del primer despliegue, crea las tablas desde tu máquina local:
+
+```bash
+# Actualiza .env temporalmente con DATABASE_URL de Supabase (puerto 5432)
+npx prisma db push
+```
+
+### Paso 2: Configurar variables en Vercel
+
+En **Vercel** (**Settings** → **Environment Variables**), carga para **Production**:
+
+- `DATABASE_URL`: URL con session pooler (puerto 6543) de Supabase
+- `DB_ALLOW_SELF_SIGNED_CERT`: `true`
+- `SERP_API_KEY`, `CRON_SECRET`: desde GitHub Secrets
+
+### Paso 3: Desplegar
+
+1. Git push a `main`
+2. Vercel inicia build automático
+3. GitHub Actions ejecuta scraper semanalmente (domingo a medianoche UTC)
 
 Detalle de conexion Supabase: `supabase/README.md`.
+
+## 🔒 Seguridad y Conexión a Base de Datos (TLS/SSL)
+
+En `lib/create-prisma-client.ts` el cliente PostgreSQL se inicializa usando un `pg.Pool`. Cuando la URL no define parámetros TLS, el cliente agrega automáticamente `sslmode=verify-full` para mantener el comportamiento seguro y estable de `pg`.
+
+Advertencia y recomendaciones:
++ - `sslmode=verify-full` es la opción más segura para producción, ya que verifica tanto el certificado TLS como el nombre del host.
++ - Si tu conexión necesita compatibilidad con la semántica libpq antigua, establece `DB_USE_LIBPQ_COMPAT=true`; el cliente entonces usará `uselibpqcompat=true&sslmode=require`.
++ - Para conexiones a `localhost` sin parámetros TLS, el cliente ahora usa `sslmode=disable` por defecto.
++ - Para conexiones con certificados autofirmados en desarrollo, puedes activar `DB_ALLOW_SELF_SIGNED_CERT=true`. Cuando se activa, el cliente fuerza `uselibpqcompat=true&sslmode=require` y deshabilita la verificación estricta de la cadena TLS.
++ - Evita usar `NODE_TLS_REJECT_UNAUTHORIZED=0` en producción: desactiva la validación TLS a nivel global y expone la aplicación a ataques "man-in-the-middle".
++ - Valida `DATABASE_URL` antes de iniciar la aplicación. Una URL mal formada o con espacios en blanco puede provocar errores de resolución de host como `ENOTFOUND`.
+
+Documentar en el runbook de la plataforma de despliegue qué estrategia TLS se utiliza y cómo rotar certificados/credenciales.
 
 ## CI/CD
 

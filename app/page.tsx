@@ -22,11 +22,33 @@ function formatMoney(value: number | null): string {
 }
 
 export default async function DashboardPage() {
-  const [kpis, recentPrices, trend] = await Promise.all([
-    getDashboardKpis(),
-    getRecentPrices(10),
-    getPriceTrend(),
-  ]);
+  let kpis: Awaited<ReturnType<typeof getDashboardKpis>> | null = null;
+  let recentPrices: Awaited<ReturnType<typeof getRecentPrices>> = [];
+  let trend: Awaited<ReturnType<typeof getPriceTrend>> = [];
+  let hasError = false;
+
+  try {
+    [kpis, recentPrices, trend] = await Promise.all([
+      getDashboardKpis(),
+      getRecentPrices(10),
+      getPriceTrend(),
+    ]);
+  } catch (error) {
+    console.error("Dashboard data fetch failed:", error);
+    hasError = true;
+  }
+
+  if (!kpis) {
+    return (
+      <div className="rounded border border-rose-200 bg-rose-50 p-6 text-rose-800">
+        <h1 className="text-xl font-semibold">Dashboard no disponible</h1>
+        <p className="mt-2 text-sm">
+          No se pudo cargar la informacion de la base de datos. Revisa la configuracion de
+          `DATABASE_URL` y reinicia el servidor.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
