@@ -12,9 +12,10 @@ export const DEFAULT_DISCOVERY_QUERIES = [
 ];
 
 const discoveryEnvSchema = z.object({
-  SERP_API_KEY: z.string().min(1, "SERP_API_KEY is required for company discovery"),
+  SERP_API_KEY: z.string().optional(),
+  SERPAPI_API_KEY: z.string().optional(),
   SERP_PROVIDER: z.enum(["serpapi", "brightdata"]).default("serpapi"),
-  SCRAPER_TARGET_CITY: z.string().min(1).default("Cordoba Capital, Cordoba, Argentina"),
+  SCRAPER_TARGET_CITY: z.string().min(1).default("Cordoba,Cordoba Province,Argentina"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
@@ -48,11 +49,24 @@ function readDiscoveryEnv() {
     throw new Error(`Invalid discovery environment: ${message}`);
   }
 
+  const apiKey = (result.data.SERP_API_KEY ?? result.data.SERPAPI_API_KEY)?.trim();
+
+  if (!apiKey) {
+    throw new Error("Invalid discovery environment: SERP_API_KEY or SERPAPI_API_KEY is required");
+  }
+
+  if (/^(tu_clave|your[_-]?key|change[_-]?me|placeholder)/i.test(apiKey)) {
+    throw new Error("Invalid discovery environment: SERP_API_KEY contains a placeholder value");
+  }
+
   if (result.data.SERP_PROVIDER !== "serpapi") {
     throw new Error(`Unsupported SERP provider: ${result.data.SERP_PROVIDER}`);
   }
 
-  return result.data;
+  return {
+    ...result.data,
+    SERP_API_KEY: apiKey,
+  };
 }
 
 function normalizeText(value: string | null | undefined): string | null {
@@ -166,16 +180,27 @@ function readMockResponses(): SerpApiResponse[] {
   return Array.isArray(parsed) ? parsed : [parsed];
 }
 
-async function fetchSerpApiLocalResults(query: string, apiKey: string): Promise<SerpApiResponse> {
+async function fetchSerpApiLocalResults(
+  query: string,
+  apiKey: string,
+  location: string,
+): Promise<SerpApiResponse> {
   const url = new URL("https://serpapi.com/search.json");
   url.searchParams.set("engine", "google_local");
   url.searchParams.set("q", query);
-  url.searchParams.set("location", "Cordoba Capital, Cordoba, Argentina");
+  url.searchParams.set("location", location);
+  url.searchParams.set("google_domain", "google.com.ar");
+  url.searchParams.set("gl", "ar");
+  url.searchParams.set("hl", "es");
   url.searchParams.set("api_key", apiKey);
 
   const response = await fetch(url);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(`SerpApi rejected the configured API key while searching "${query}"`);
+    }
+
     throw new Error(`SerpApi request failed for "${query}" with status ${response.status}`);
   }
 
@@ -189,11 +214,29 @@ export async function discoverCompaniesFromMaps(): Promise<DiscoveredCompany[]> 
     return mapAndDedupeSerpApiResponses(readMockResponses());
   }
 
-  const responses = await Promise.all(
+  const results = await Promise.allSettled(
     DEFAULT_DISCOVERY_QUERIES.map((query) =>
-      fetchSerpApiLocalResults(`${query} ${discoveryEnv.SCRAPER_TARGET_CITY}`, discoveryEnv.SERP_API_KEY),
+      fetchSerpApiLocalResults(query, discoveryEnv.SERP_API_KEY, discoveryEnv.SCRAPER_TARGET_CITY),
     ),
   );
+  const responses: SerpApiResponse[] = [];
+  const errors: string[] = [];
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      responses.push(result.value);
+    } else {
+      errors.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+    }
+  }
+
+  if (responses.length === 0) {
+    throw new Error(`SerpApi discovery failed for every query: ${errors.join(" | ")}`);
+  }
+
+  if (errors.length > 0) {
+    console.error(`SerpApi discovery had ${errors.length} failed queries`, errors);
+  }
 
   return mapAndDedupeSerpApiResponses(responses);
 }

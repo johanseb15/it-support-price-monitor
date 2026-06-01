@@ -97,7 +97,7 @@ describe("google discovery", () => {
     vi.stubEnv("SERP_PROVIDER", "serpapi");
 
     await expect(discoverCompaniesFromMaps()).rejects.toThrow(
-      "Invalid discovery environment: SERP_API_KEY is required for company discovery",
+      "Invalid discovery environment: SERP_API_KEY or SERPAPI_API_KEY is required",
     );
   });
 });

@@ -4,6 +4,7 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 import type { ScrapedServiceRaw } from "./types";
 
 const MAX_NAVIGATION_TIMEOUT_MS = 30_000;
+const POST_LOAD_SETTLE_MS = 1_500;
 const MAX_RESULTS_PER_PAGE = 50;
 const MIN_TEXT_LENGTH = 5;
 const MAX_TEXT_LENGTH = 300;
@@ -85,6 +86,28 @@ function extractCandidatesFromHtml(html: string, sourceUrl: string): ScrapedServ
   return candidates;
 }
 
+async function fetchStaticHtml(url: string): Promise<ScrapedServiceRaw[]> {
+  const response = await fetch(url, {
+    headers: {
+      "user-agent": USER_AGENT,
+      accept: "text/html,application/xhtml+xml",
+    },
+    signal: AbortSignal.timeout(MAX_NAVIGATION_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Static HTML request failed with status ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!contentType.toLowerCase().includes("html")) {
+    return [];
+  }
+
+  return extractCandidatesFromHtml(await response.text(), response.url);
+}
+
 export async function extractPricesFromWebsite(url: string): Promise<ScrapedServiceRaw[]> {
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
@@ -98,13 +121,20 @@ export async function extractPricesFromWebsite(url: string): Promise<ScrapedServ
 
     const page = await context.newPage();
     page.setDefaultTimeout(MAX_NAVIGATION_TIMEOUT_MS);
-    await page.goto(url, { waitUntil: "networkidle", timeout: MAX_NAVIGATION_TIMEOUT_MS });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: MAX_NAVIGATION_TIMEOUT_MS });
+    await page.waitForTimeout(POST_LOAD_SETTLE_MS);
 
     const html = await page.content();
     return extractCandidatesFromHtml(html, page.url());
   } catch (error) {
-    console.error(`Failed to extract prices from ${url}`, error);
-    return [];
+    console.error(`Playwright extraction failed for ${url}; retrying static HTML`, error);
+
+    try {
+      return await fetchStaticHtml(url);
+    } catch (fallbackError) {
+      console.error(`Failed to extract prices from ${url}`, fallbackError);
+      return [];
+    }
   } finally {
     await context?.close().catch(() => undefined);
     await browser?.close().catch(() => undefined);

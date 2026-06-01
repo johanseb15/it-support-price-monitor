@@ -15,7 +15,7 @@ jobs:
       SERP_PROVIDER: "serpapi"
       CRON_SECRET: "ci-cron-secret"
       SCRAPER_MAX_COMPANIES_PER_RUN: "25"
-      SCRAPER_TARGET_CITY: "Cordoba Capital, Cordoba, Argentina"
+      SCRAPER_TARGET_CITY: "Cordoba,Cordoba Province,Argentina"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,6 +1,10 @@
-import { runCompleteScrapingPipeline } from "../src/services/scraper/runner";
+import { loadEnvConfig } from "@next/env";
 
 async function main() {
+  loadEnvConfig(process.cwd());
+
+  const { runCompleteScrapingPipeline } = await import("../src/services/scraper/runner");
+
   console.log("[scraper] Starting complete scraping pipeline...");
 
   const startedAt = Date.now();
@@ -12,6 +16,9 @@ async function main() {
   console.log(`[scraper] Discovered companies: ${result.discoveredCount}`);
   console.log(`[scraper] Extracted prices: ${result.extractedCount}`);
   console.log(`[scraper] Individual company errors: ${result.errorCount}`);
+  if (result.errorMessage) {
+    console.error(`[scraper] Error: ${result.errorMessage}`);
+  }
   console.log(`[scraper] Finished in ${durationSeconds}s`);
 
   if (!result.ok) {

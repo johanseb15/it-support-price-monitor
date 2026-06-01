@@ -144,7 +144,7 @@ SERP_API_KEY="tu_clave_de_api"
 SERP_PROVIDER="serpapi"
 CRON_SECRET="cambiar_por_un_token_largo"
 SCRAPER_MAX_COMPANIES_PER_RUN="25"
-SCRAPER_TARGET_CITY="Cordoba Capital, Cordoba, Argentina"
+SCRAPER_TARGET_CITY="Cordoba,Cordoba Province,Argentina"
 NODE_ENV="development"
 ```
 
@@ -643,4 +643,3 @@ Una fase se considera terminada cuando:
 - Los tests relevantes pasan o se documenta por que no aplican.
 - No hay secretos reales en archivos versionados.
 - El cambio queda explicado brevemente en README o en este documento si afecta arquitectura.
-

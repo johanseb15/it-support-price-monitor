@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { env } from "../../../../lib/env";
 import { runCompleteScrapingPipeline } from "../../../../src/services/scraper/runner";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const authorization = request.headers.get("authorization");
 
@@ -12,12 +15,16 @@ export async function POST(request: Request) {
 
   const result = await runCompleteScrapingPipeline();
 
-  return NextResponse.json({
-    ok: result.ok,
-    runId: result.runId,
-    discoveredCount: result.discoveredCount,
-    extractedCount: result.extractedCount,
-    status: result.status,
-    errorCount: result.errorCount,
-  });
+  return NextResponse.json(
+    {
+      ok: result.ok,
+      runId: result.runId,
+      discoveredCount: result.discoveredCount,
+      extractedCount: result.extractedCount,
+      status: result.status,
+      errorCount: result.errorCount,
+      errorMessage: result.errorMessage,
+    },
+    { status: result.ok ? 200 : 500 },
+  );
 }

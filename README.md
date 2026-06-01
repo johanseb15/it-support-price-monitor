@@ -43,7 +43,7 @@ SERP_API_KEY="tu_clave_de_serpapi"
 SERP_PROVIDER="serpapi"
 CRON_SECRET="token_largo_para_endpoint_cron"
 SCRAPER_MAX_COMPANIES_PER_RUN="25"
-SCRAPER_TARGET_CITY="Cordoba Capital, Cordoba, Argentina"
+SCRAPER_TARGET_CITY="Cordoba,Cordoba Province,Argentina"
 NODE_ENV="development"
 ```
 
@@ -210,7 +210,7 @@ El repositorio incluye tres workflows:
 
 - `.github/workflows/ci.yml`: valida Prisma, lint, tests y build en cada push a `main` y pull request.
 - `.github/workflows/deploy-vercel.yml`: despliega a Vercel en cada push a `main` o manualmente.
-- `.github/workflows/scraper-cron.yml`: dispara el scraper por HTTP una vez por semana o manualmente.
+- `.github/workflows/scraper-cron.yml`: ejecuta el scraper por CLI una vez por semana o manualmente.
 
 Secrets requeridos para CI/CD:
 
@@ -219,7 +219,7 @@ Secrets requeridos para CI/CD:
 - `VERCEL_PROJECT_ID`
 - `CRON_SECRET` (mismo valor que en Vercel)
 
-Las variables de runtime de la aplicacion (`DATABASE_URL`, `SERP_API_KEY`, `SERP_PROVIDER`, `SCRAPER_MAX_COMPANIES_PER_RUN`, `SCRAPER_TARGET_CITY`, `CRON_SECRET`) deben configurarse en Vercel.
+Las variables de runtime de la aplicacion (`DATABASE_URL`, `SERP_API_KEY`, `SERP_PROVIDER`, `SCRAPER_MAX_COMPANIES_PER_RUN`, `SCRAPER_TARGET_CITY`, `CRON_SECRET`) deben configurarse en Vercel. Para SerpApi, `SCRAPER_TARGET_CITY` debe usar el nombre canonico `Cordoba,Cordoba Province,Argentina`; `Cordoba Capital, Cordoba, Argentina` devuelve error de ubicacion no soportada.
 
 ## Estructura Principal
 

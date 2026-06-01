@@ -15,7 +15,7 @@ jobs:
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
       DB_ALLOW_SELF_SIGNED_CERT: ${{ secrets.DB_ALLOW_SELF_SIGNED_CERT || 'false' }}
       SCRAPER_MAX_COMPANIES_PER_RUN: "25"
-      SCRAPER_TARGET_CITY: "Cordoba Capital, Cordoba, Argentina"
+      SCRAPER_TARGET_CITY: "Cordoba,Cordoba Province,Argentina"
       NODE_ENV: production
     steps:
       - name: Checkout

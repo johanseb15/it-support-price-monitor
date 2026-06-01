@@ -14,6 +14,7 @@ export type ScrapingPipelineResult = {
   discoveredCount: number;
   extractedCount: number;
   errorCount: number;
+  errorMessage?: string;
 };
 
 type RunnerDb = Pick<PrismaClient, "scrapeRun" | "company" | "priceHistory">;
@@ -142,7 +143,10 @@ export async function runCompleteScrapingPipeline(
         const candidates = await extractPrices(company.websiteUrl);
 
         for (const candidate of candidates) {
-          const normalized = await normalizeService(candidate.text, candidate.priceRaw);
+          const normalized = await normalizeService(
+            `${candidate.title} ${candidate.text}`.trim(),
+            candidate.priceRaw,
+          );
 
           if (!normalized.isValid || normalized.price === null) {
             continue;
@@ -215,6 +219,7 @@ export async function runCompleteScrapingPipeline(
       discoveredCount,
       extractedCount,
       errorCount,
+      errorMessage,
     };
   }
 }
