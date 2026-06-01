@@ -13,16 +13,6 @@ function createPgPool(connectionString: string) {
     throw new Error("DATABASE_URL must not contain whitespace");
   }
 
-  try {
-    const parsed = new URL(connectionString);
-
-    if (!parsed.hostname || parsed.hostname.trim() === "") {
-      throw new Error("DATABASE_URL must include a valid hostname");
-    }
-  } catch (error) {
-    throw new Error(`Invalid DATABASE_URL: ${(error as Error).message}`);
-  }
-
   const useLibpqCompat = ["1", "true", "yes"].includes(
     process.env.DB_USE_LIBPQ_COMPAT?.trim().toLowerCase() ?? "",
   );
@@ -30,10 +20,11 @@ function createPgPool(connectionString: string) {
   const allowSelfSignedCert = ["1", "true", "yes"].includes(
     process.env.DB_ALLOW_SELF_SIGNED_CERT?.trim().toLowerCase() ?? "",
   );
-
   function normalizeConnectionString(conn: string) {
-    const parsed = new URL(conn);
-    const params = new URLSearchParams(parsed.searchParams);
+    const questionIndex = conn.indexOf("?");
+    const basePart = questionIndex > -1 ? conn.substring(0, questionIndex) : conn;
+    const queryPart = questionIndex > -1 ? conn.substring(questionIndex + 1) : "";
+    const params = new URLSearchParams(queryPart);
     const sslmode = params.get("sslmode")?.toLowerCase();
     const hasLibpqCompat = params.has("uselibpqcompat");
     const local = isLocalDatabase(conn);
@@ -65,8 +56,8 @@ function createPgPool(connectionString: string) {
       }
     }
 
-    parsed.search = params.toString();
-    return parsed.toString();
+    const newQuery = params.toString();
+    return newQuery ? `${basePart}?${newQuery}` : basePart;
   }
 
   const poolConfig: PoolConfig = {

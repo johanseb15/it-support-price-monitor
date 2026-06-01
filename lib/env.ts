@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().trim().url(),
+  DATABASE_URL: z.string().trim().min(1),
   SERP_API_KEY: z.string().min(1),
   SERP_PROVIDER: z.enum(["serpapi", "brightdata"]).default("serpapi"),
   CRON_SECRET: z.string().min(1),
