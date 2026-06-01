@@ -25,7 +25,6 @@ export default async function DashboardPage() {
   let kpis: Awaited<ReturnType<typeof getDashboardKpis>> | null = null;
   let recentPrices: Awaited<ReturnType<typeof getRecentPrices>> = [];
   let trend: Awaited<ReturnType<typeof getPriceTrend>> = [];
-  let hasError = false;
 
   try {
     [kpis, recentPrices, trend] = await Promise.all([
@@ -35,7 +34,6 @@ export default async function DashboardPage() {
     ]);
   } catch (error) {
     console.error("Dashboard data fetch failed:", error);
-    hasError = true;
   }
 
   if (!kpis) {

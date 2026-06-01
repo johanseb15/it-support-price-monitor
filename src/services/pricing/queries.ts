@@ -52,6 +52,19 @@ type TrendQueryRow = {
   averagePrice: unknown;
 };
 
+type DecimalLike = {
+  toNumber: () => number;
+};
+
+function isDecimalLike(value: unknown): value is DecimalLike {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "toNumber" in value &&
+    typeof value.toNumber === "function"
+  );
+}
+
 function safeToNumber(value: unknown, defaultValue = 0): number {
   if (value === null || value === undefined) return defaultValue;
 
@@ -65,12 +78,12 @@ function safeToNumber(value: unknown, defaultValue = 0): number {
       return Number.isFinite(n) ? n : defaultValue;
     }
 
-    if (value && typeof value === "object" && "toNumber" in value && typeof (value as any).toNumber === "function") {
-      const n = (value as { toNumber: () => number }).toNumber();
+    if (isDecimalLike(value)) {
+      const n = value.toNumber();
       return Number.isFinite(n) ? n : defaultValue;
     }
 
-    const n = Number(value as any);
+    const n = Number(value);
     return Number.isFinite(n) ? n : defaultValue;
   } catch {
     return defaultValue;
