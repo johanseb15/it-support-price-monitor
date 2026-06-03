@@ -3,6 +3,18 @@ import { loadEnvConfig } from "@next/env";
 async function main() {
   loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 
+  const missingVariables = ["DATABASE_URL", "SERP_API_KEY"].filter(
+    (key) => !process.env[key]?.trim(),
+  );
+
+  if (missingVariables.length > 0) {
+    console.error(
+      `[scraper] Missing required environment variables: ${missingVariables.join(", ")}`,
+    );
+    process.exit(1);
+    return;
+  }
+
   const { runCompleteScrapingPipeline } = await import("../src/services/scraper/runner");
 
   console.log("[scraper] Starting complete scraping pipeline...");

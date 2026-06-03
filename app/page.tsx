@@ -15,12 +15,14 @@ export const dynamic = "force-dynamic";
 async function runScraperAction() {
   "use server";
 
-  const { runCompleteScrapingPipeline } = await import(
-    "../src/services/scraper/runner"
-  );
-
-  await runCompleteScrapingPipeline();
-  revalidatePath("/");
+  try {
+    const { db } = await import("../lib/db");
+    await db.scrapeRun.create({ data: { status: "QUEUED" } });
+    revalidatePath("/");
+  } catch (error) {
+    // Swallow errors to avoid surfacing 500 to the user; log for debugging
+    console.error("Failed to enqueue scrape run:", error);
+  }
 }
 
 function formatMoney(value: number | null): string {

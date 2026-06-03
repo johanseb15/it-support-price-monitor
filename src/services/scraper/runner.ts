@@ -104,6 +104,7 @@ export async function runCompleteScrapingPipeline(
   let extractedCount = 0;
   let errorCount = 0;
   let discoveryErrorMessage: string | null = null;
+  const companyErrorMessages: string[] = [];
 
   try {
     const run = await dbClient.scrapeRun.create({
@@ -179,11 +180,15 @@ export async function runCompleteScrapingPipeline(
         });
       } catch (error) {
         errorCount += 1;
-        console.error(`Scraping failed for company ${company.id} (${company.websiteUrl})`, error);
+        const message = `Scraping failed for company ${company.id} (${company.websiteUrl}): ${compactError(error)}`;
+        companyErrorMessages.push(message);
+        console.error(message, error);
       }
     }
 
-    const status = (errorCount > 0 || discoveryErrorMessage !== null) ? "PARTIAL" : "SUCCESS";
+    const status = errorCount > 0 || discoveryErrorMessage !== null ? "PARTIAL" : "SUCCESS";
+    const errorMessage = [discoveryErrorMessage, ...companyErrorMessages].filter(Boolean).join(" | ");
+
     await dbClient.scrapeRun.update({
       where: { id: runId },
       data: {
@@ -191,7 +196,7 @@ export async function runCompleteScrapingPipeline(
         status,
         discoveredCount,
         extractedCount,
-        errorMessage: discoveryErrorMessage ?? undefined,
+        errorMessage: errorMessage || undefined,
       },
     });
 
