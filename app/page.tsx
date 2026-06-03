@@ -1,13 +1,24 @@
 import { KpiCard } from "../components/dashboard/kpi-card";
 import { PriceTrendChart } from "../components/dashboard/price-trend-chart";
 import { RecentPricesTable } from "../components/dashboard/recent-prices-table";
+import { Button } from "../components/ui/button";
+import { revalidatePath } from "next/cache";
+import { runCompleteScrapingPipeline } from "../src/services/scraper/runner";
 import {
   getDashboardKpis,
+  getLastScrapeRun,
   getPriceTrend,
   getRecentPrices,
 } from "../src/services/pricing/queries";
 
 export const dynamic = "force-dynamic";
+
+async function runScraperAction() {
+  "use server";
+
+  await runCompleteScrapingPipeline();
+  revalidatePath("/");
+}
 
 function formatMoney(value: number | null): string {
   if (value === null) {
@@ -25,12 +36,14 @@ export default async function DashboardPage() {
   let kpis: Awaited<ReturnType<typeof getDashboardKpis>> | null = null;
   let recentPrices: Awaited<ReturnType<typeof getRecentPrices>> = [];
   let trend: Awaited<ReturnType<typeof getPriceTrend>> = [];
+  let lastRun: Awaited<ReturnType<typeof getLastScrapeRun>> | null = null;
 
   try {
-    [kpis, recentPrices, trend] = await Promise.all([
+    [kpis, recentPrices, trend, lastRun] = await Promise.all([
       getDashboardKpis(),
       getRecentPrices(10),
       getPriceTrend(),
+      getLastScrapeRun(),
     ]);
   } catch (error) {
     console.error("Dashboard data fetch failed:", error);
@@ -56,6 +69,42 @@ export default async function DashboardPage() {
           Estado operativo del relevamiento de precios IT en Cordoba Capital.
         </p>
       </header>
+
+      <section className="mb-6 rounded border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-zinc-950">Ejecutar scraper manual</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Inicia el pipeline de discovery y extracción de precios sin necesidad de cron externo.
+            </p>
+          </div>
+          <form action={runScraperAction}>
+            <Button type="submit" variant="primary">
+              Lanzar scraper
+            </Button>
+          </form>
+        </div>
+
+        {lastRun ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded border border-zinc-200 bg-zinc-50 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Ultima ejecucion</p>
+              <p className="mt-2 text-sm text-zinc-900">{new Date(lastRun.startedAt).toLocaleString("es-AR")}</p>
+            </div>
+            <div className="rounded border border-zinc-200 bg-zinc-50 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Status</p>
+              <p className="mt-2 text-sm text-zinc-900">{lastRun.status}</p>
+            </div>
+            <div className="rounded border border-zinc-200 bg-zinc-50 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resultados</p>
+              <p className="mt-2 text-sm text-zinc-900">{lastRun.discoveredCount} empresas</p>
+              <p className="text-sm text-zinc-700">{lastRun.extractedCount} precios</p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-zinc-500">Aun no se ejecuto el scraper. Usa el boton para iniciarlo.</p>
+        )}
+      </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Empresas activas" value={String(kpis.activeCompanies)} />

@@ -188,6 +188,16 @@ export async function getRecentPrices(limit = 10): Promise<RecentPriceRow[]> {
   }));
 }
 
+export type LastScrapeRun = {
+  id: string;
+  status: string;
+  discoveredCount: number;
+  extractedCount: number;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+};
+
 export async function getPriceTrend(): Promise<TrendPoint[]> {
   const since = new Date();
   since.setMonth(since.getMonth() - 6);
@@ -229,6 +239,31 @@ export async function getPriceTrend(): Promise<TrendPoint[]> {
   }
 
   return [...points.values()];
+}
+
+export async function getLastScrapeRun(): Promise<LastScrapeRun | null> {
+  const scrapeRun = await safeDbCall(
+    () =>
+      db.scrapeRun.findFirst({
+        orderBy: { startedAt: "desc" },
+      }),
+    null,
+    "getLastScrapeRun",
+  );
+
+  if (!scrapeRun) {
+    return null;
+  }
+
+  return {
+    id: scrapeRun.id,
+    status: scrapeRun.status,
+    discoveredCount: scrapeRun.discoveredCount,
+    extractedCount: scrapeRun.extractedCount,
+    errorMessage: scrapeRun.errorMessage,
+    startedAt: serializeDate(scrapeRun.startedAt),
+    finishedAt: scrapeRun.finishedAt ? serializeDate(scrapeRun.finishedAt) : null,
+  };
 }
 
 export async function getCompanies(params: {
