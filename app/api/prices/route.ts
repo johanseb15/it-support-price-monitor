@@ -47,5 +47,12 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.json({ ok: true, prices });
+  // Prisma Decimal is not a plain JS number — convert before JSON serialization
+  // to avoid an empty object {} being sent instead of the numeric value.
+  const serialized = prices.map((p) => ({
+    ...p,
+    extractedPrice: Number(p.extractedPrice),
+  }));
+
+  return NextResponse.json({ ok: true, prices: serialized });
 }
