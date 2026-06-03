@@ -1,7 +1,7 @@
 import { loadEnvConfig } from "@next/env";
 
 async function main() {
-  loadEnvConfig(process.cwd());
+  loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 
   const { runCompleteScrapingPipeline } = await import("../src/services/scraper/runner");
 

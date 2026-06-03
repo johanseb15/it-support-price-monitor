@@ -1,3 +1,6 @@
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
+
 import { createPrismaClient } from "../lib/create-prisma-client";
 
 const prisma = createPrismaClient();

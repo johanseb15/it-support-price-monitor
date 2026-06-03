@@ -103,6 +103,7 @@ export async function runCompleteScrapingPipeline(
   let discoveredCount = 0;
   let extractedCount = 0;
   let errorCount = 0;
+  let discoveryErrorMessage: string | null = null;
 
   try {
     const run = await dbClient.scrapeRun.create({
@@ -114,11 +115,16 @@ export async function runCompleteScrapingPipeline(
     });
     runId = run.id;
 
-    const discoveredCompanies = await discoverCompanies();
-    discoveredCount = discoveredCompanies.length;
+    try {
+      const discoveredCompanies = await discoverCompanies();
+      discoveredCount = discoveredCompanies.length;
 
-    for (const company of discoveredCompanies) {
-      await upsertDiscoveredCompany(dbClient, company);
+      for (const company of discoveredCompanies) {
+        await upsertDiscoveredCompany(dbClient, company);
+      }
+    } catch (error) {
+      discoveryErrorMessage = compactError(error);
+      console.error("[scraper] Discovery step failed, proceeding with existing active companies:", error);
     }
 
     const activeCompanies = await dbClient.company.findMany({
@@ -177,7 +183,7 @@ export async function runCompleteScrapingPipeline(
       }
     }
 
-    const status = errorCount > 0 ? "PARTIAL" : "SUCCESS";
+    const status = (errorCount > 0 || discoveryErrorMessage !== null) ? "PARTIAL" : "SUCCESS";
     await dbClient.scrapeRun.update({
       where: { id: runId },
       data: {
@@ -185,6 +191,7 @@ export async function runCompleteScrapingPipeline(
         status,
         discoveredCount,
         extractedCount,
+        errorMessage: discoveryErrorMessage ?? undefined,
       },
     });
 
