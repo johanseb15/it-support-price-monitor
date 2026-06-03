@@ -22,18 +22,6 @@ export function getEnv(): Env {
   return _env;
 }
 
-// Safe getter that doesn't validate during build.
-// Accessing these outside of actual function execution (build time) returns the raw env var or throws only when called.
-export function getSafeEnv<K extends keyof Env>(key: K): Env[K] | undefined {
-  try {
-    return getEnv()[key];
-  } catch {
-    // During build, if env validation fails, return undefined
-    // This allows the build to complete. Runtime access will fail properly.
-    return process.env[key as string] as string | undefined;
-  }
-}
-
 // Lazy proxy: only evaluates when accessed.
 export const env: Env = new Proxy({} as Env, {
   get: (_target, prop: string | symbol) => {
