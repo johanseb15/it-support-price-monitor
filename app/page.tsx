@@ -3,7 +3,6 @@ import { PriceTrendChart } from "../components/dashboard/price-trend-chart";
 import { RecentPricesTable } from "../components/dashboard/recent-prices-table";
 import { Button } from "../components/ui/button";
 import { revalidatePath } from "next/cache";
-import { runCompleteScrapingPipeline } from "../src/services/scraper/runner";
 import {
   getDashboardKpis,
   getLastScrapeRun,
@@ -15,6 +14,10 @@ export const dynamic = "force-dynamic";
 
 async function runScraperAction() {
   "use server";
+
+  const { runCompleteScrapingPipeline } = await import(
+    "../src/services/scraper/runner"
+  );
 
   await runCompleteScrapingPipeline();
   revalidatePath("/");
