@@ -30,7 +30,7 @@ export function getSafeEnv<K extends keyof Env>(key: K): Env[K] | undefined {
   } catch {
     // During build, if env validation fails, return undefined
     // This allows the build to complete. Runtime access will fail properly.
-    return process.env[key as string] as any;
+    return process.env[key as string] as string | undefined;
   }
 }
 
