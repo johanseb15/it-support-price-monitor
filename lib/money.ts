@@ -4,6 +4,9 @@ const STANDALONE_FORMATTED_MONEY_PATTERN =
   /\b([0-9]{1,3}(?:[.,][0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+,[0-9]{1,2})\b/;
 
 function normalizeSeparators(value: string): number | null {
+  if (typeof value !== "string") {
+    return null;
+  }
   const compact = value.replace(/\s+/g, "");
 
   if (!compact || !/\d/.test(compact)) {
@@ -42,6 +45,9 @@ function normalizeSeparators(value: string): number | null {
 }
 
 export function parseArgentineMoney(input: string): number | null {
+  if (typeof input !== "string") {
+    return null;
+  }
   const match = input.match(MONEY_CONTEXT_PATTERN);
   const formattedMatch = input.match(STANDALONE_FORMATTED_MONEY_PATTERN);
   const rawAmount = match?.[1] ?? match?.[2] ?? formattedMatch?.[1];

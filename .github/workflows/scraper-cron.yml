@@ -34,4 +34,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run scraping pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DB_ALLOW_SELF_SIGNED_CERT: ${{ secrets.DB_ALLOW_SELF_SIGNED_CERT || 'false' }}
         run: npm run scraper:run

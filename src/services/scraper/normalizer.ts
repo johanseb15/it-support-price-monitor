@@ -81,14 +81,17 @@ function buildServiceName(text: string): string {
 }
 
 export async function normalizeData(text: string, priceRaw: string): Promise<NormalizedService> {
-  const price = parseArgentineMoney(priceRaw);
-  const combinedText = `${text} ${priceRaw}`.trim();
+  const safeText = typeof text === "string" ? text : "";
+  const safePriceRaw = typeof priceRaw === "string" ? priceRaw : "";
+
+  const price = parseArgentineMoney(safePriceRaw);
+  const combinedText = `${safeText} ${safePriceRaw}`.trim();
   const { supportLevel, confidence } = chooseSupportLevel(combinedText);
 
   return {
     isValid: price !== null,
     supportLevel,
-    serviceName: buildServiceName(text),
+    serviceName: buildServiceName(safeText),
     price,
     confidence: price === null ? 0 : confidence,
   };

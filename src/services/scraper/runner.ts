@@ -146,33 +146,47 @@ export async function runCompleteScrapingPipeline(
         continue;
       }
 
+      console.log(`[scraper] Processing company: ${company.name} (${company.websiteUrl})`);
+
       try {
         const candidates = await extractPrices(company.websiteUrl);
+        console.log(`[scraper] Extracted ${candidates.length} candidate elements from ${company.name}`);
 
+        let companyExtractedCount = 0;
         for (const candidate of candidates) {
-          const normalized = await normalizeService(
-            `${candidate.title} ${candidate.text}`.trim(),
-            candidate.priceRaw,
-          );
+          try {
+            const normalized = await normalizeService(
+              `${candidate.title} ${candidate.text}`.trim(),
+              candidate.priceRaw,
+            );
 
-          if (!normalized.isValid || normalized.price === null) {
-            continue;
+            if (!normalized.isValid || normalized.price === null) {
+              continue;
+            }
+
+            await dbClient.priceHistory.create({
+              data: {
+                companyId: company.id,
+                supportLevel: normalized.supportLevel,
+                serviceName: normalized.serviceName,
+                extractedPrice: normalized.price,
+                currency: "ARS",
+                rawText: candidate.text,
+                sourceUrl: candidate.sourceUrl,
+                confidence: normalized.confidence,
+              },
+            });
+            extractedCount += 1;
+            companyExtractedCount += 1;
+          } catch (candidateError) {
+            console.error(
+              `[scraper] Failed to process/save candidate service for company ${company.name} (${company.id}): ${compactError(candidateError)}`,
+              candidateError,
+            );
           }
-
-          await dbClient.priceHistory.create({
-            data: {
-              companyId: company.id,
-              supportLevel: normalized.supportLevel,
-              serviceName: normalized.serviceName,
-              extractedPrice: normalized.price,
-              currency: "ARS",
-              rawText: candidate.text,
-              sourceUrl: candidate.sourceUrl,
-              confidence: normalized.confidence,
-            },
-          });
-          extractedCount += 1;
         }
+
+        console.log(`[scraper] Successfully saved ${companyExtractedCount} prices for ${company.name}`);
 
         await dbClient.company.update({
           where: { id: company.id },
@@ -182,7 +196,7 @@ export async function runCompleteScrapingPipeline(
         errorCount += 1;
         const message = `Scraping failed for company ${company.id} (${company.websiteUrl}): ${compactError(error)}`;
         companyErrorMessages.push(message);
-        console.error(message, error);
+        console.error(`[scraper] ${message}`, error);
       }
     }
 

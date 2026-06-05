@@ -65,35 +65,44 @@ function extractPriceRaw(text: string): string {
 }
 
 function extractCandidatesFromHtml(html: string, sourceUrl: string): ScrapedServiceRaw[] {
-  const $ = cheerio.load(html);
-  const candidates: ScrapedServiceRaw[] = [];
-  const seenTexts = new Set<string>();
+  try {
+    const $ = cheerio.load(html);
+    const candidates: ScrapedServiceRaw[] = [];
+    const seenTexts = new Set<string>();
 
-  $("script,style,noscript,svg").remove();
+    $("script,style,noscript,svg").remove();
 
-  $("body")
-    .find("h1,h2,h3,h4,h5,h6,p,span,li,a,td,th,small,strong,b,button")
-    .each((_, element) => {
-      if (candidates.length >= MAX_RESULTS_PER_PAGE) {
-        return false;
-      }
+    $("body")
+      .find("h1,h2,h3,h4,h5,h6,p,span,li,a,td,th,small,strong,b,button")
+      .each((_, element) => {
+        try {
+          if (candidates.length >= MAX_RESULTS_PER_PAGE) {
+            return false;
+          }
 
-      const text = cleanText($(element).text());
+          const text = cleanText($(element).text());
 
-      if (!isCandidateText(text) || seenTexts.has(text.toLowerCase())) {
-        return;
-      }
+          if (!isCandidateText(text) || seenTexts.has(text.toLowerCase())) {
+            return;
+          }
 
-      seenTexts.add(text.toLowerCase());
-      candidates.push({
-        title: closestTitle($, element),
-        text,
-        priceRaw: extractPriceRaw(text),
-        sourceUrl,
+          seenTexts.add(text.toLowerCase());
+          candidates.push({
+            title: closestTitle($, element),
+            text,
+            priceRaw: extractPriceRaw(text),
+            sourceUrl,
+          });
+        } catch (elemError) {
+          console.error(`[target-extractor] Error parsing HTML element on ${sourceUrl}:`, elemError);
+        }
       });
-    });
 
-  return candidates;
+    return candidates;
+  } catch (error) {
+    console.error(`[target-extractor] Failed to parse HTML from ${sourceUrl}:`, error);
+    return [];
+  }
 }
 
 async function fetchStaticHtml(url: string): Promise<ScrapedServiceRaw[]> {
