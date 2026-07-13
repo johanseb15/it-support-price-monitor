@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "env:check": "tsx scripts/check-runtime-env.ts",
     "scraper:run": "tsx scripts/run-scraper-cli.ts",
     "test": "vitest run"
   },

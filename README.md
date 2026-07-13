@@ -104,6 +104,12 @@ npm exec prisma validate
 Valida el schema de Prisma.
 
 ```bash
+npm run env:check
+```
+
+Valida las variables requeridas de runtime antes de conectar Prisma o ejecutar el scraper.
+
+```bash
 npm run db:migrate -- --name init
 ```
 
@@ -214,6 +220,8 @@ El repositorio incluye tres workflows:
 
 Secrets requeridos para CI/CD:
 
+- `DATABASE_URL`
+- `SERP_API_KEY`
 - `VERCEL_TOKEN`
 - `VERCEL_ORG_ID`
 - `VERCEL_PROJECT_ID`
