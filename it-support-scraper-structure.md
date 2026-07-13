@@ -109,7 +109,61 @@ monitor-precios-it/
   prisma/
     schema.prisma
     seed.ts
+  scripts/
+    run-scraper-cli.ts
   src/
+    domain/
+      entities/
+        company.ts
+        discovered-company.ts
+        normalized-service.ts
+        price-history.ts
+        scrape-run.ts
+        scraped-price-candidate.ts
+      value-objects/
+        discovery-source.ts
+        support-level.ts
+      ports/
+        company-discovery-service.ts
+        company-repository.ts
+        price-extraction-strategy.ts
+        price-normalizer.ts
+        price-repository.ts
+        scrape-run-repository.ts
+        scraper-service.ts
+      errors/
+        compact-error.ts
+    application/
+      dto/
+        scraping-results.ts
+      use-cases/
+        discover-companies.ts
+        execute-scraping-for-company.ts
+        run-scraping-pipeline.ts
+    infrastructure/
+      composition/
+        container.ts
+      persistence/
+        prisma/
+          mappers.ts
+          prisma-company-repository.ts
+          prisma-price-repository.ts
+          prisma-scrape-run-repository.ts
+      scraping/
+        engines/
+          playwright-scraper-engine.ts
+          static-html-scraper-engine.ts
+        factories/
+          scraper-engine-factory.ts
+        strategies/
+          default-price-extraction-strategy.ts
+          price-extraction-strategy-registry.ts
+        normalizers/
+          keyword-price-normalizer.ts
+        serpapi/
+          serp-api-company-discovery.ts
+        extract-prices-from-website.ts
+        website-scraper-service.ts
     services/
       scraper/
         google-discovery.ts
@@ -125,6 +179,9 @@ monitor-precios-it/
       normalizer.test.ts
     integration/
       scraper-runner.test.ts
+      scraper-runner-and-discovery.test.ts
+      target-extractor.test.ts
+      google-discovery.test.ts
   .env.example
   AGENTS.md
   it-support-scraper-structure.md
@@ -132,7 +189,24 @@ monitor-precios-it/
   README.md
 ```
 
-Nota: este proyecto ya tiene `app/`, por eso se mantiene App Router. La carpeta `src/services/` se usa para logica de dominio y scraping, no para paginas.
+Nota: este proyecto ya tiene `app/`, por eso se mantiene App Router. La logica de negocio vive en `src/domain/` y `src/application/`. Los detalles tecnicos (Prisma, Playwright, Cheerio, SerpApi) viven en `src/infrastructure/`. La carpeta `src/services/scraper/` conserva re-exportaciones de compatibilidad; el entrypoint principal del pipeline es `src/infrastructure/composition/container.ts`.
+
+## Arquitectura Limpia
+
+Reglas de dependencia:
+
+- `domain/` y `application/` no importan Playwright, Cheerio, Prisma ni SerpApi.
+- `infrastructure/` implementa los ports definidos en `domain/ports/`.
+- `app/api/*` y `scripts/run-scraper-cli.ts` solo instancian el container y ejecutan casos de uso.
+- Patron Strategy: reglas de extraccion HTML en `infrastructure/scraping/strategies/`.
+- Factory Method: `ScraperEngineFactory` elige Playwright o HTML estatico.
+- Repository: persistencia encapsulada en `infrastructure/persistence/prisma/`.
+
+Casos de uso principales:
+
+- `DiscoverCompanies`: descubre empresas via SerpApi y las persiste.
+- `ExecuteScrapingForCompany`: extrae, normaliza y guarda precios de una empresa.
+- `RunScrapingPipeline`: orquesta discovery + scraping por lote (reemplaza al runner monolitico).
 
 ## Variables de Entorno
 
@@ -238,11 +312,9 @@ model ScrapeRun {
 
 ## Tipos Compartidos
 
-Archivo: `src/services/scraper/types.ts`
+Entidades de dominio en `src/domain/entities/` y re-exportaciones legacy en `src/services/scraper/types.ts`:
 
 ```ts
-import type { SupportLevel } from "@prisma/client";
-
 export type DiscoveredCompany = {
   name: string;
   websiteUrl?: string | null;
@@ -261,7 +333,7 @@ export type ScrapedServiceRaw = {
 
 export type NormalizedService = {
   isValid: boolean;
-  supportLevel: SupportLevel;
+  supportLevel: SupportLevel; // src/domain/value-objects/support-level.ts
   serviceName: string;
   price: number | null;
   confidence: number;
@@ -270,7 +342,7 @@ export type NormalizedService = {
 
 ## Descubrimiento Google Maps/Search
 
-Archivo: `src/services/scraper/google-discovery.ts`
+Archivo: `src/infrastructure/scraping/serpapi/serp-api-company-discovery.ts` (re-export en `src/services/scraper/google-discovery.ts`)
 
 Responsabilidad:
 
@@ -306,7 +378,7 @@ export async function discoverCompaniesFromMaps(): Promise<DiscoveredCompany[]> 
 
 ## Extractor de Sitios Objetivo
 
-Archivo: `src/services/scraper/target-extractor.ts`
+Archivo: `src/infrastructure/scraping/website-scraper-service.ts` (re-export en `src/services/scraper/target-extractor.ts`)
 
 Responsabilidad:
 
@@ -335,7 +407,7 @@ export async function extractPricesFromWebsite(url: string): Promise<ScrapedServ
 
 ## Normalizacion
 
-Archivo: `src/services/scraper/normalizer.ts`
+Archivo: `src/infrastructure/scraping/normalizers/keyword-price-normalizer.ts` (re-export en `src/services/scraper/normalizer.ts`)
 
 Responsabilidad:
 
@@ -384,29 +456,29 @@ export function parseArgentineMoney(input: string): number | null {
 
 ## Orquestador
 
-Archivo: `src/services/scraper/runner.ts`
+Caso de uso: `src/application/use-cases/run-scraping-pipeline.ts`
+
+Entrypoint DI: `src/infrastructure/composition/container.ts`
+
+Compatibilidad legacy: `src/services/scraper/runner.ts` (adaptador para tests existentes)
 
 Responsabilidad:
 
 - Crear ScrapeRun.
-- Ejecutar descubrimiento.
-- Upsert de empresas.
-- Extraer precios de empresas activas.
-- Normalizar y guardar historicos.
+- Ejecutar descubrimiento via `DiscoverCompanies`.
+- Upsert de empresas via `ICompanyRepository`.
+- Extraer precios via `ExecuteScrapingForCompany` por cada empresa activa.
+- Normalizar y guardar historicos via ports.
 - Continuar aunque falle una empresa.
 
 Contrato:
 
 ```ts
-export async function runCompleteScrapingPipeline() {
-  // 1. Crear ScrapeRun status RUNNING.
-  // 2. Descubrir empresas.
-  // 3. Upsert companies.
-  // 4. Buscar companies activas con websiteUrl.
-  // 5. Extraer servicios por sitio.
-  // 6. Normalizar.
-  // 7. Insertar PriceHistory.
-  // 8. Finalizar ScrapeRun status SUCCESS/PARTIAL/FAILED.
+import { runCompleteScrapingPipeline } from "@/src/infrastructure/composition/container";
+
+export async function runCompleteScrapingPipeline(overrides?) {
+  // 1. createScraperContainer() inyecta repos y servicios.
+  // 2. RunScrapingPipeline.execute() orquesta el flujo completo.
 }
 ```
 

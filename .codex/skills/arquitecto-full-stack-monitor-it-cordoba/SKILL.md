@@ -28,7 +28,8 @@ Usar exclusivamente:
 
 - No crear carpetas ni archivos fuera de la estructura documentada en el contrato del proyecto.
 - Antes de crear rutas nuevas, revisar la documentación del repo, especialmente archivos como `CLAUDE.md` e `it-support-scraper-structure.md` si existen.
-- Colocar lógica de scraping y normalización únicamente en `src/services/scraper/`.
+- Colocar entidades y ports en `src/domain/`, casos de uso en `src/application/`, e implementaciones técnicas (Prisma, Playwright, Cheerio, SerpApi) en `src/infrastructure/`.
+- `src/services/scraper/` conserva solo re-exportaciones de compatibilidad; el entrypoint del pipeline es `src/infrastructure/composition/container.ts`.
 - Mantener `app/api/` como controladores o webhooks; no escribir lógica de negocio compleja dentro de endpoints.
 - Colocar componentes visuales en `components/`.
 - No importar librerías de Node.js puro, `fs`, `playwright`, `cheerio` u otras dependencias server-only dentro de componentes React cliente.

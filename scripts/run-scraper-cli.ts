@@ -1,21 +1,24 @@
 import { loadEnvConfig } from "@next/env";
 
+import { validateRuntimeEnv } from "../lib/env";
+
 async function main() {
   loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 
-  const missingVariables = ["DATABASE_URL", "SERP_API_KEY"].filter(
-    (key) => !process.env[key]?.trim(),
-  );
+  const envValidation = validateRuntimeEnv();
 
-  if (missingVariables.length > 0) {
-    console.error(
-      `[scraper] Missing required environment variables: ${missingVariables.join(", ")}`,
-    );
+  if (!envValidation.ok) {
+    console.error("[scraper] Runtime environment validation failed:");
+    for (const error of envValidation.errors) {
+      console.error(`[scraper] - ${error}`);
+    }
     process.exit(1);
     return;
   }
 
-  const { runCompleteScrapingPipeline } = await import("../src/services/scraper/runner");
+  const { runCompleteScrapingPipeline } = await import(
+    "../src/infrastructure/composition/container"
+  );
 
   console.log("[scraper] Starting complete scraping pipeline...");
 

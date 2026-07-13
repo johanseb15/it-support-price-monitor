@@ -1,251 +1,174 @@
 import type { PrismaClient } from "@prisma/client";
 
-import { db } from "../../../lib/db";
-import { env } from "../../../lib/env";
-import { discoverCompaniesFromMaps } from "./google-discovery";
-import { normalizeData } from "./normalizer";
-import { extractPricesFromWebsite } from "./target-extractor";
-import type { DiscoveredCompany, NormalizedService, ScrapedServiceRaw } from "./types";
+import type { DiscoveredCompany } from "../../domain/entities/discovered-company";
+import type { NormalizedService } from "../../domain/entities/normalized-service";
+import type { ScrapedPriceCandidate } from "../../domain/entities/scraped-price-candidate";
+import type { Company } from "../../domain/entities/company";
+import type { FinalizeScrapeRunInput } from "../../domain/entities/scrape-run";
+import type { InsertPriceInput, PriceHistoryRecord } from "../../domain/entities/price-history";
+import type { ICompanyRepository } from "../../domain/ports/company-repository";
+import type { IPriceRepository } from "../../domain/ports/price-repository";
+import type { IScrapeRunRepository } from "../../domain/ports/scrape-run-repository";
+import {
+  runCompleteScrapingPipeline as runPipeline,
+  type ScrapingPipelineResult,
+} from "../../infrastructure/composition/container";
 
-export type ScrapingPipelineResult = {
-  ok: boolean;
-  runId: string;
-  status: "SUCCESS" | "PARTIAL" | "FAILED";
-  discoveredCount: number;
-  extractedCount: number;
-  errorCount: number;
-  errorMessage?: string;
-};
+export type { ScrapingPipelineResult };
 
-type RunnerDb = Pick<PrismaClient, "scrapeRun" | "company" | "priceHistory">;
+type LegacyRunnerDb = Pick<PrismaClient, "scrapeRun" | "company" | "priceHistory">;
 
-type RunnerDependencies = {
-  dbClient?: RunnerDb;
+export type RunnerDependencies = {
+  dbClient?: LegacyRunnerDb;
   discoverCompanies?: () => Promise<DiscoveredCompany[]>;
-  extractPrices?: (url: string) => Promise<ScrapedServiceRaw[]>;
+  extractPrices?: (url: string) => Promise<ScrapedPriceCandidate[]>;
   normalizeService?: (text: string, priceRaw: string) => Promise<NormalizedService>;
   maxCompaniesPerRun?: number;
 };
 
-function compactError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function companyWhere(company: DiscoveredCompany) {
-  if (company.mapsPlaceId) {
-    return { mapsPlaceId: company.mapsPlaceId };
-  }
-
-  if (company.websiteUrl) {
-    return { websiteUrl: company.websiteUrl };
-  }
-
-  return null;
-}
-
-async function upsertDiscoveredCompany(dbClient: RunnerDb, company: DiscoveredCompany) {
-  const baseData = {
-    name: company.name,
-    websiteUrl: company.websiteUrl ?? null,
-    mapsPlaceId: company.mapsPlaceId ?? null,
-    address: company.address ?? null,
-    phone: company.phone ?? null,
-    city: company.city,
-    province: "Cordoba",
-    country: "Argentina",
-    source: "SERPAPI_GOOGLE_MAPS" as const,
-  };
-  const where = companyWhere(company);
-
-  if (where) {
-    return dbClient.company.upsert({
-      where,
-      update: baseData,
-      create: {
-        ...baseData,
-        isActive: true,
+function createLegacyRepositories(dbClient: LegacyRunnerDb): {
+  scrapeRunRepository: IScrapeRunRepository;
+  companyRepository: ICompanyRepository;
+  priceRepository: IPriceRepository;
+} {
+  return {
+    scrapeRunRepository: {
+      createRunning: async () => {
+        const record = await dbClient.scrapeRun.create({
+          data: {
+            status: "RUNNING",
+            discoveredCount: 0,
+            extractedCount: 0,
+          },
+        });
+        return {
+          id: record.id,
+          status: "RUNNING",
+          discoveredCount: record.discoveredCount,
+          extractedCount: record.extractedCount,
+          finishedAt: record.finishedAt,
+          errorMessage: record.errorMessage,
+        };
       },
-    });
-  }
-
-  const existing = await dbClient.company.findFirst({
-    where: {
-      name: company.name,
-      address: company.address ?? null,
+      finalize: async (runId: string, input: FinalizeScrapeRunInput) => {
+        await dbClient.scrapeRun.update({
+          where: { id: runId },
+          data: {
+            finishedAt: new Date(),
+            status: input.status,
+            discoveredCount: input.discoveredCount,
+            extractedCount: input.extractedCount,
+            errorMessage: input.errorMessage,
+          },
+        });
+      },
     },
-  });
+    companyRepository: {
+      upsertDiscovered: async (company: DiscoveredCompany): Promise<Company> => {
+        const baseData = {
+          name: company.name,
+          websiteUrl: company.websiteUrl ?? null,
+          mapsPlaceId: company.mapsPlaceId ?? null,
+          address: company.address ?? null,
+          phone: company.phone ?? null,
+          city: company.city,
+          province: "Cordoba",
+          country: "Argentina",
+          source: "SERPAPI_GOOGLE_MAPS" as const,
+          isActive: true,
+        };
 
-  if (existing) {
-    return dbClient.company.update({
-      where: { id: existing.id },
-      data: baseData,
-    });
-  }
+        let where: { mapsPlaceId: string } | { websiteUrl: string } | null = null;
+        if (company.mapsPlaceId) {
+          where = { mapsPlaceId: company.mapsPlaceId };
+        } else if (company.websiteUrl) {
+          where = { websiteUrl: company.websiteUrl };
+        }
 
-  return dbClient.company.create({
-    data: {
-      ...baseData,
-      isActive: true,
+        if (where) {
+          const record = await dbClient.company.upsert({
+            where,
+            update: baseData,
+            create: baseData,
+          });
+          return record as Company;
+        }
+
+        const existing = await dbClient.company.findFirst({
+          where: {
+            name: company.name,
+            address: company.address ?? null,
+          },
+        });
+
+        if (existing) {
+          const record = await dbClient.company.update({
+            where: { id: existing.id },
+            data: baseData,
+          });
+          return record as Company;
+        }
+
+        const record = await dbClient.company.create({ data: baseData });
+        return record as Company;
+      },
+      findActiveWithWebsite: async (limit: number): Promise<Company[]> => {
+        const records = await dbClient.company.findMany({
+          where: {
+            isActive: true,
+            websiteUrl: { not: null },
+          },
+          orderBy: { lastScrapedAt: "asc" },
+          take: limit,
+        });
+        return records as Company[];
+      },
+      markScraped: async (companyId: string, scrapedAt: Date) => {
+        await dbClient.company.update({
+          where: { id: companyId },
+          data: { lastScrapedAt: scrapedAt },
+        });
+      },
     },
-  });
+    priceRepository: {
+      insert: async (input: InsertPriceInput): Promise<PriceHistoryRecord> => {
+        const record = await dbClient.priceHistory.create({ data: input });
+        return {
+          id: record.id,
+          companyId: record.companyId,
+          supportLevel: record.supportLevel,
+          serviceName: record.serviceName,
+          extractedPrice: Number(record.extractedPrice),
+          currency: record.currency,
+          rawText: record.rawText,
+          sourceUrl: record.sourceUrl,
+          confidence: record.confidence,
+        };
+      },
+    },
+  };
 }
 
 export async function runCompleteScrapingPipeline(
   dependencies: RunnerDependencies = {},
 ): Promise<ScrapingPipelineResult> {
-  const dbClient = dependencies.dbClient ?? db;
-  const discoverCompanies = dependencies.discoverCompanies ?? discoverCompaniesFromMaps;
-  const extractPrices = dependencies.extractPrices ?? extractPricesFromWebsite;
-  const normalizeService = dependencies.normalizeService ?? normalizeData;
-  const maxCompaniesPerRun = dependencies.maxCompaniesPerRun ?? env.SCRAPER_MAX_COMPANIES_PER_RUN;
+  const legacyRepositories = dependencies.dbClient
+    ? createLegacyRepositories(dependencies.dbClient)
+    : undefined;
 
-  let runId: string | null = null;
-  let discoveredCount = 0;
-  let extractedCount = 0;
-  let errorCount = 0;
-  let discoveryErrorMessage: string | null = null;
-  const companyErrorMessages: string[] = [];
-
-  try {
-    const run = await dbClient.scrapeRun.create({
-      data: {
-        status: "RUNNING",
-        discoveredCount: 0,
-        extractedCount: 0,
-      },
-    });
-    runId = run.id;
-
-    try {
-      const discoveredCompanies = await discoverCompanies();
-      discoveredCount = discoveredCompanies.length;
-
-      for (const company of discoveredCompanies) {
-        await upsertDiscoveredCompany(dbClient, company);
-      }
-    } catch (error) {
-      discoveryErrorMessage = compactError(error);
-      console.error("[scraper] Discovery step failed, proceeding with existing active companies:", error);
-    }
-
-    const activeCompanies = await dbClient.company.findMany({
-      where: {
-        isActive: true,
-        websiteUrl: {
-          not: null,
-        },
-      },
-      orderBy: {
-        lastScrapedAt: "asc",
-      },
-      take: maxCompaniesPerRun,
-    });
-
-    for (const company of activeCompanies) {
-      if (!company.websiteUrl) {
-        continue;
-      }
-
-      console.log(`[scraper] Processing company: ${company.name} (${company.websiteUrl})`);
-
-      try {
-        const candidates = await extractPrices(company.websiteUrl);
-        console.log(`[scraper] Extracted ${candidates.length} candidate elements from ${company.name}`);
-
-        let companyExtractedCount = 0;
-        for (const candidate of candidates) {
-          try {
-            const normalized = await normalizeService(
-              `${candidate.title} ${candidate.text}`.trim(),
-              candidate.priceRaw,
-            );
-
-            if (!normalized.isValid || normalized.price === null) {
-              continue;
-            }
-
-            await dbClient.priceHistory.create({
-              data: {
-                companyId: company.id,
-                supportLevel: normalized.supportLevel,
-                serviceName: normalized.serviceName,
-                extractedPrice: normalized.price,
-                currency: "ARS",
-                rawText: candidate.text,
-                sourceUrl: candidate.sourceUrl,
-                confidence: normalized.confidence,
-              },
-            });
-            extractedCount += 1;
-            companyExtractedCount += 1;
-          } catch (candidateError) {
-            console.error(
-              `[scraper] Failed to process/save candidate service for company ${company.name} (${company.id}): ${compactError(candidateError)}`,
-              candidateError,
-            );
-          }
-        }
-
-        console.log(`[scraper] Successfully saved ${companyExtractedCount} prices for ${company.name}`);
-
-        await dbClient.company.update({
-          where: { id: company.id },
-          data: { lastScrapedAt: new Date() },
-        });
-      } catch (error) {
-        errorCount += 1;
-        const message = `Scraping failed for company ${company.id} (${company.websiteUrl}): ${compactError(error)}`;
-        companyErrorMessages.push(message);
-        console.error(`[scraper] ${message}`, error);
-      }
-    }
-
-    const status = errorCount > 0 || discoveryErrorMessage !== null ? "PARTIAL" : "SUCCESS";
-    const errorMessage = [discoveryErrorMessage, ...companyErrorMessages].filter(Boolean).join(" | ");
-
-    await dbClient.scrapeRun.update({
-      where: { id: runId },
-      data: {
-        finishedAt: new Date(),
-        status,
-        discoveredCount,
-        extractedCount,
-        errorMessage: errorMessage || undefined,
-      },
-    });
-
-    return {
-      ok: true,
-      runId,
-      status,
-      discoveredCount,
-      extractedCount,
-      errorCount,
-    };
-  } catch (error) {
-    const errorMessage = compactError(error);
-
-    if (runId) {
-      await dbClient.scrapeRun.update({
-        where: { id: runId },
-        data: {
-          finishedAt: new Date(),
-          status: "FAILED",
-          discoveredCount,
-          extractedCount,
-          errorMessage,
-        },
-      });
-    }
-
-    return {
-      ok: false,
-      runId: runId ?? "",
-      status: "FAILED",
-      discoveredCount,
-      extractedCount,
-      errorCount,
-      errorMessage,
-    };
-  }
+  return runPipeline({
+    scrapeRunRepository: legacyRepositories?.scrapeRunRepository,
+    companyRepository: legacyRepositories?.companyRepository,
+    priceRepository: legacyRepositories?.priceRepository,
+    companyDiscovery: dependencies.discoverCompanies
+      ? { discover: dependencies.discoverCompanies }
+      : undefined,
+    scraperService: dependencies.extractPrices
+      ? { extractPrices: dependencies.extractPrices }
+      : undefined,
+    priceNormalizer: dependencies.normalizeService
+      ? { normalize: dependencies.normalizeService }
+      : undefined,
+    maxCompaniesPerRun: dependencies.maxCompaniesPerRun,
+  });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { env } from "../../../../lib/env";
-import { runCompleteScrapingPipeline } from "../../../../src/services/scraper/runner";
+import { runCompleteScrapingPipeline } from "../../../../src/infrastructure/composition/container";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
