@@ -1,0 +1,5 @@
+﻿env:
+  - variable: DATABASE_URL
+    secret: DATABASE_URL
+  - variable: SERPAPI_KEY
+    secret: SERPAPI_KEY

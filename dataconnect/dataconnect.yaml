@@ -1,0 +1,13 @@
+specVersion: "v1"
+serviceId: "it-support-price-monitor-service"
+location: "us-east4"
+schemas:
+  - source: "./schema"
+    datasource:
+      postgresql:
+        database: "it-support-price-monitor-database"
+        cloudSql:
+          instanceId: "it-support-price-monitor-instance"
+          # schemaValidation: "STRICT"     # STRICT mode makes Postgres schema match Data Connect exactly.
+          # schemaValidation: "COMPATIBLE" # COMPATIBLE mode makes Postgres schema compatible with Data Connect.
+connectorDirs: ["./example"]
