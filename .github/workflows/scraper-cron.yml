@@ -24,12 +24,50 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       - name: Validate required secrets before install
         run: |
-          node -e "const required=['DATABASE_URL','SERP_API_KEY','CRON_SECRET']; for (const key of required) { if (!process.env[key] || !process.env[key].trim()) { console.error('[env] Missing required secret: '+key); process.exit(1); } } try { const url = new URL(process.env.DATABASE_URL); if (!['postgresql:','postgres:'].includes(url.protocol)) throw new Error('Invalid protocol'); } catch { console.error('[env] Missing or invalid DATABASE_URL. Configure the DATABASE_URL GitHub secret with a valid PostgreSQL connection string.'); process.exit(1); } console.log('[env] Required secrets look valid.');"
+          # Check all required secrets exist and are not empty
+          node -e "
+            const required = ['DATABASE_URL', 'SERP_API_KEY', 'CRON_SECRET'];
+            const errors = [];
+            
+            for (const key of required) {
+              const value = process.env[key];
+              if (!value || !value.trim()) {
+                errors.push(key);
+              }
+            }
+            
+            // Validate DATABASE_URL is a valid PostgreSQL URL
+            try {
+              const dbUrl = process.env.DATABASE_URL?.trim();
+              if (dbUrl) {
+                const url = new URL(dbUrl);
+                if (!['postgresql:', 'postgres:'].includes(url.protocol)) {
+                  errors.push('DATABASE_URL must use postgresql:// or postgres:// protocol');
+                }
+              }
+            } catch (e) {
+              errors.push('DATABASE_URL is not a valid URL: ' + e.message);
+            }
+            
+            if (errors.length > 0) {
+              console.error('[GitHub Actions] Pre-install validation failed:');
+              errors.forEach(err => console.error('  ✗ ' + err));
+              console.error('');
+              console.error('Configure these GitHub Secrets:');
+              console.error('  - DATABASE_URL (valid PostgreSQL connection string)');
+              console.error('  - SERP_API_KEY (from https://serpapi.com)');
+              console.error('  - CRON_SECRET (random bearer token for webhook auth)');
+              console.error('  - Optional: DB_ALLOW_SELF_SIGNED_CERT (true|false)');
+              process.exit(1);
+            }
+            
+            console.log('[GitHub Actions] ✓ All required secrets are valid');
+          "
 
       - name: Install dependencies
         run: npm ci --include=dev
