@@ -1,3 +1,22 @@
+> **Ficha de proyecto — Vyntrava | 2026-11-20**
+> Estado documental: revisión de repositorio; no implica despliegue ni auditoría de producción.
+
+## Resumen y propósito
+
+**Monitor experimental de precios de soporte IT.** Aplicación Next.js/TypeScript, Prisma y PostgreSQL con descubrimiento de negocios, adquisición de precios, historial y visualización analítica.
+
+## Estado y límites
+
+No se ha comprobado operatividad actual de proveedores externos ni disponibilidad efectiva de datos comparables. Los resultados no deben promocionarse como auditoría de mercado completa.
+
+## Ubicación en el portfolio
+
+Antecedente técnico de Enki. Evaluar extracción de funcionalidades puntuales manteniendo sus historias independientes.
+
+**Código:** [it-support-price-monitor](https://github.com/johanseb15/it-support-price-monitor) · **Documentación técnica previa:** conservada a continuación.
+
+---
+
 # Monitor de Precios IT Cordoba
 
 Herramienta profesional para descubrir empresas de soporte tecnico en Cordoba Capital, extraer precios publicados, normalizar servicios por nivel de soporte y visualizar historicos comparables en una interfaz operativa.
